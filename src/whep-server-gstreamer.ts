@@ -12,7 +12,7 @@ import {
 import { sdpMudgeIceCandidates } from './util/sdpMudgeIceCandidates';
 import { sdpMudgeAudioRedEnc } from './util';
 
-// Initialize GStreamer
+// Initialize GStreamer//
 Gst.init([]);
 
 const timeout = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
