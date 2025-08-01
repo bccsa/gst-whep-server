@@ -13,6 +13,7 @@ import {
 } from './util/gstSignalHandling';
 import { sdpMudgeIceCandidates } from './util/sdpMudgeIceCandidates';
 import { sdpMudgeAudioRedEnc } from './util';
+import { filterSdp } from './util/sdpFilter';
 
 // Initialize GStreamer//
 Gst.init([]);
@@ -33,8 +34,10 @@ class WHEPGStreamerServer {
     private sessions: Map<string, WHEPSession> = new Map();
     private audioFreq: number = 440;
     private waveType: number = 0; // sine wave
+    private pulseSrcDevice: string;
 
-    constructor() {
+    constructor(pulseSrcDevice?: string) {
+        this.pulseSrcDevice = pulseSrcDevice || 'default';
         this.app = express();
         this.setupMiddleware();
         this.setupRoutes();
@@ -92,7 +95,7 @@ class WHEPGStreamerServer {
                     });
                 }
 
-                const sdpOffer = req.body;
+                const sdpOffer = filterSdp(req.body);
                 if (!sdpOffer || typeof sdpOffer !== 'string') {
                     return res.status(400).json({ error: 'Invalid SDP offer' });
                 }
@@ -219,10 +222,7 @@ class WHEPGStreamerServer {
             // audioTestSrc.setProperty('freq', this.audioFreq);
             // audioTestSrc.setProperty('wave', this.waveType);
             // audioTestSrc.setProperty('volume', 0.3);
-            audioTestSrc.setProperty(
-                'device',
-                'alsa_input.usb-C-Media_Electronics_Inc._USB_PnP_Sound_Device-00.mono-fallback'
-            );
+            audioTestSrc.setProperty('device', this.pulseSrcDevice);
 
             // Configure opus encoder
             opusEnc.setProperty('bitrate', 64000);
@@ -504,8 +504,8 @@ class WHEPGStreamerServer {
                         answer.sdp.asText(),
                         iceCandidates
                     );
-                    const mudgedSdpWithRed = sdpMudgeAudioRedEnc(mudgedSddWidthCandidates);
-                    resolve(mudgedSdpWithRed);
+                    // const mudgedSdpWithRed = sdpMudgeAudioRedEnc(mudgedSddWidthCandidates);
+                    resolve(mudgedSddWidthCandidates);
                     return;
                 };
 
@@ -573,7 +573,6 @@ class WHEPGStreamerServer {
             console.log('🚀 WHEP GStreamer Server started');
             console.log('=====================================');
             console.log(`📡 Server running on port ${port}`);
-            console.log(`🎵 Audio: ${this.audioFreq}Hz sine wave`);
             console.log(`📊 Health check: http://localhost:${port}/health`);
             console.log(`📋 Sessions list: http://localhost:${port}/sessions`);
             console.log(`🎶 WHEP endpoint: http://localhost:${port}/whep`);

@@ -19,7 +19,12 @@ Make sure you have GStreamer installed on your system:
 # Ubuntu/Debian
 sudo apt-get install gstreamer1.0-tools gstreamer1.0-plugins-base \
     gstreamer1.0-plugins-good gstreamer1.0-plugins-bad \
-    gstreamer1.0-plugins-ugly gstreamer1.0-libav
+    gstreamer1.0-plugins-ugly gstreamer1.0-libav \
+    libnice10 gstreamer1.0-nice
+
+# Ubuntu/Debian dev dependencies (needed to build this project)
+sudo apt install build-essential libgirepository1.0-dev libcairo2-dev \
+    gir1.2-gtk-3.0 pkg-config
 
 # macOS (with Homebrew)
 brew install gstreamer gst-plugins-base gst-plugins-good \
