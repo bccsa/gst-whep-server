@@ -159,6 +159,14 @@ export function gstSetIceCandidate(webrtcElement: Gst.Element, num: number, cand
     webrtcElement.emit('add-ice-candidate', num, candidate);
 }
 
+export async function gstGetTransceivers(webrtcElement: Gst.Element, timeout: number = 5000) {
+    // let data;
+    // webrtcElement.on('get-transceivers', () => {
+    //     data = webrtcElement.Tran
+    // });
+    // return data;
+}
+
 // /**
 //  * Specialized helper for WebRTC create-offer
 //  */

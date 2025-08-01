@@ -2,12 +2,14 @@ import express from 'express';
 import cors from 'cors';
 import { v4 as uuidv4 } from 'uuid';
 import Gst from '@girs/node-gst-1.0';
+import GstWebRTC from '@girs/node-gstwebrtc-1.0';
 import path from 'path';
 import {
     gstCreateAnswer,
     gstSetIceCandidate,
     gstSetLocalDescription,
     gstSetRemoteDescription,
+    gstGetTransceivers,
 } from './util/gstSignalHandling';
 import { sdpMudgeIceCandidates } from './util/sdpMudgeIceCandidates';
 import { sdpMudgeAudioRedEnc } from './util';
@@ -182,13 +184,14 @@ class WHEPGStreamerServer {
             }
 
             // Create elements
-            const audioTestSrc = Gst.ElementFactory.make('audiotestsrc', 'audio-source');
+            const audioTestSrc = Gst.ElementFactory.make('pulsesrc', 'audio-source');
+            // const audioTestSrc = Gst.ElementFactory.make('audiotestsrc', 'audio-source');
             const audioConvert = Gst.ElementFactory.make('audioconvert', 'audio-convert');
             const audioResample = Gst.ElementFactory.make('audioresample', 'audio-resample');
             const queue1 = Gst.ElementFactory.make('queue', 'queue1');
             const opusEnc = Gst.ElementFactory.make('opusenc', 'opus-encoder');
             const rtpOpusPay = Gst.ElementFactory.make('rtpopuspay', 'rtp-opus-pay');
-            // const rtpUlpFecEnc = Gst.ElementFactory.make('rtpulpfecenc', 'rtp-ulpfec-encoder');
+            const rtpUlpFecEnc = Gst.ElementFactory.make('rtpulpfecenc', 'rtp-ulpfec-encoder');
             const rtpRedEnc = Gst.ElementFactory.make('rtpredenc', 'rtp-red-encoder');
             // const identifier = Gst.ElementFactory.make('identity', 'identity');
             const queue2 = Gst.ElementFactory.make('queue', 'queue2');
@@ -201,7 +204,7 @@ class WHEPGStreamerServer {
                 !queue1 ||
                 !opusEnc ||
                 !rtpOpusPay ||
-                // !rtpUlpFecEnc ||
+                !rtpUlpFecEnc ||
                 !rtpRedEnc ||
                 // !identifier ||
                 !queue2 ||
@@ -212,25 +215,31 @@ class WHEPGStreamerServer {
             }
 
             // Configure elements
-            audioTestSrc.setProperty('is-live', true);
-            audioTestSrc.setProperty('freq', this.audioFreq);
-            audioTestSrc.setProperty('wave', this.waveType);
-            audioTestSrc.setProperty('volume', 0.3);
+            // audioTestSrc.setProperty('is-live', true);
+            // audioTestSrc.setProperty('freq', this.audioFreq);
+            // audioTestSrc.setProperty('wave', this.waveType);
+            // audioTestSrc.setProperty('volume', 0.3);
+            audioTestSrc.setProperty(
+                'device',
+                'alsa_input.usb-C-Media_Electronics_Inc._USB_PnP_Sound_Device-00.mono-fallback'
+            );
 
             // Configure opus encoder
-            opusEnc.setProperty('bitrate', 128000);
+            opusEnc.setProperty('bitrate', 64000);
             opusEnc.setProperty('frame-size', 20);
+            opusEnc.setProperty('inband-fec', true);
+            opusEnc.setProperty('packet-loss-percentage', 4);
 
             // Configure RTP payloader
             rtpOpusPay.setProperty('pt', 111);
 
             // Configure ULPFEC encoder
-            // rtpUlpFecEnc.setProperty('pt', 122);
-            // rtpUlpFecEnc.setProperty('percentage', 100);
+            rtpUlpFecEnc.setProperty('pt', 122);
+            rtpUlpFecEnc.setProperty('percentage', 100);
 
             // Configure RED encoder
-            rtpRedEnc.setProperty('pt', 63);
-            rtpRedEnc.setProperty('distance', 1);
+            // rtpRedEnc.setProperty('pt', 63);
+            // rtpRedEnc.setProperty('distance', 2);
 
             // Configure identity element
             // identifier.setProperty('drop-probability', 0.05);
@@ -242,11 +251,17 @@ class WHEPGStreamerServer {
             pipeline.add(queue1);
             pipeline.add(opusEnc);
             pipeline.add(rtpOpusPay);
-            // pipeline.add(rtpUlpFecEnc);
+            pipeline.add(rtpUlpFecEnc);
             pipeline.add(rtpRedEnc);
             // pipeline.add(identifier);
             pipeline.add(queue2);
             pipeline.add(webrtc);
+
+            webrtc.on('on-new-transceiver', (transceiver: GstWebRTC.WebRTCRTPTransceiver) => {
+                transceiver.direction = GstWebRTC.WebRTCRTPTransceiverDirection.SENDONLY;
+                transceiver.setProperty('fec-type', GstWebRTC.WebRTCFECType.ULP_RED);
+                transceiver.setProperty('do-nack', true);
+            });
 
             // Link elements
             if (
@@ -255,8 +270,8 @@ class WHEPGStreamerServer {
                 !audioResample.link(queue1) ||
                 !queue1.link(opusEnc) ||
                 !opusEnc.link(rtpOpusPay) ||
-                !rtpOpusPay.link(queue2)
-                // !rtpUlpFecEnc.link(rtpRedEnc) ||
+                !rtpOpusPay.link(rtpUlpFecEnc) ||
+                !rtpUlpFecEnc.link(queue2)
                 // !rtpRedEnc.link(queue2)
             ) {
                 console.error('❌ Failed to link pipeline elements');
@@ -266,7 +281,7 @@ class WHEPGStreamerServer {
             // Link queue2 to webrtc with caps
             const caps = Gst.Caps.fromString(
                 // 'application/x-rtp,media=audio,encoding-name=OPUS,payload=111'
-                'application/x-rtp,media=audio,encoding-name=RED,clock-rate=48000,payload=96,fmtp=(string)"111/111"'
+                'application/x-rtp,media=audio,encoding-name=RED,clock-rate=48000,payload=63'
             );
             // if (!queue2.linkFiltered(webrtc, caps)) {
             //     console.error('❌ Failed to link queue to webrtc with caps');
@@ -474,7 +489,16 @@ class WHEPGStreamerServer {
 
                     // Wait for the candidates to be collected
                     // TODO: We need a better way to get the candidates without using a timer
-                    await timeout(1000);
+                    await timeout(3000);
+
+                    let rtpredenc;
+                    const _bin_webrtc = session.webrtc as Gst.Bin;
+                    const _bin_rtp = _bin_webrtc.getChildByName('bin0') as Gst.Bin;
+                    if (_bin_rtp) rtpredenc = _bin_rtp.getChildByName('rtpredenc0');
+                    else console.log('❌ Unable to set RED distance due to rtpbin not found');
+                    if (rtpredenc) rtpredenc.setProperty('distance', 2);
+                    if (rtpredenc) rtpredenc.setProperty('allow-no-red-blocks', false);
+                    else console.log('❌ Unable to set RED distance due to rtpredenc0 not found');
 
                     const mudgedSddWidthCandidates = sdpMudgeIceCandidates(
                         answer.sdp.asText(),
