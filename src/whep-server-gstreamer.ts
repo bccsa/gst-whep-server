@@ -9,11 +9,9 @@ import {
     gstSetIceCandidate,
     gstSetLocalDescription,
     gstSetRemoteDescription,
-    gstGetTransceivers,
-} from './util/gstSignalHandling';
-import { sdpMudgeIceCandidates } from './util/sdpMudgeIceCandidates';
-import { sdpMudgeAudioRedEnc } from './util';
-import { filterSdp } from './util/sdpFilter';
+    sdpMudgeIceCandidates,
+    filterSdp
+} from './util';
 
 // Initialize GStreamer//
 Gst.init([]);
