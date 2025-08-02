@@ -7,7 +7,9 @@ async function main(): Promise<void> {
     console.log('');
 
     try {
-        const server = new WHEPGStreamerServer();
+        const server = new WHEPGStreamerServer({
+            pulseDevice: process.env.PULSE_DEVICE || 'default',
+        });
 
         // Graceful shutdown handling
         process.on('SIGINT', () => {

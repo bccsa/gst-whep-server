@@ -20,15 +20,12 @@ Make sure you have GStreamer installed on your system:
 sudo apt-get install gstreamer1.0-tools gstreamer1.0-plugins-base \
     gstreamer1.0-plugins-good gstreamer1.0-plugins-bad \
     gstreamer1.0-plugins-ugly gstreamer1.0-libav \
-    libnice10 gstreamer1.0-nice
+    libnice10 gstreamer1.0-nice gir1.2-gst-plugins-bad-1.0 \
+    gir1.2-gst-plugins-base-1.0
 
 # Ubuntu/Debian dev dependencies (needed to build this project)
 sudo apt install build-essential libgirepository1.0-dev libcairo2-dev \
     gir1.2-gtk-3.0 pkg-config
-
-# macOS (with Homebrew)
-brew install gstreamer gst-plugins-base gst-plugins-good \
-    gst-plugins-bad gst-plugins-ugly gst-libav
 
 # Check installation
 gst-inspect-1.0 webrtcbin

@@ -29,15 +29,27 @@ interface WHEPSession {
     sdpOffer?: string; // Store SDP offer for later processing
 }
 
+type WhepServerSettings = {
+    pulseDevice: string; // PulseAudio source device
+    port?: number; // Port for the WHEP server
+    opusFec?: boolean; // Enable Opus FEC
+    opusFecPacketLoss?: number; // Opus FEC packet loss percentage
+    opusComplexity?: number; // Opus complexity (0-10)
+    opusBitrate?: number; // Opus bitrate in bps
+    opusFrameSize?: number; // Opus frame size in ms
+    rtpRed?: boolean; // Enable RTP RED
+    rtpRedDistance?: number; // RTP RED distance
+};
+
 class WHEPGStreamerServer {
     private app: express.Application;
     private sessions: Map<string, WHEPSession> = new Map();
     private audioFreq: number = 440;
     private waveType: number = 0; // sine wave
-    private pulseSrcDevice: string;
+    private settings: WhepServerSettings;
 
-    constructor(pulseSrcDevice?: string) {
-        this.pulseSrcDevice = pulseSrcDevice || 'default';
+    constructor(settings: WhepServerSettings) {
+        this.settings = settings;
         this.app = express();
         this.setupMiddleware();
         this.setupRoutes();
@@ -195,7 +207,6 @@ class WHEPGStreamerServer {
             const opusEnc = Gst.ElementFactory.make('opusenc', 'opus-encoder');
             const rtpOpusPay = Gst.ElementFactory.make('rtpopuspay', 'rtp-opus-pay');
             const rtpUlpFecEnc = Gst.ElementFactory.make('rtpulpfecenc', 'rtp-ulpfec-encoder');
-            const rtpRedEnc = Gst.ElementFactory.make('rtpredenc', 'rtp-red-encoder');
             // const identifier = Gst.ElementFactory.make('identity', 'identity');
             const queue2 = Gst.ElementFactory.make('queue', 'queue2');
             const webrtc = Gst.ElementFactory.make('webrtcbin', 'webrtc');
@@ -208,8 +219,6 @@ class WHEPGStreamerServer {
                 !opusEnc ||
                 !rtpOpusPay ||
                 !rtpUlpFecEnc ||
-                !rtpRedEnc ||
-                // !identifier ||
                 !queue2 ||
                 !webrtc
             ) {
@@ -222,13 +231,13 @@ class WHEPGStreamerServer {
             // audioTestSrc.setProperty('freq', this.audioFreq);
             // audioTestSrc.setProperty('wave', this.waveType);
             // audioTestSrc.setProperty('volume', 0.3);
-            audioTestSrc.setProperty('device', this.pulseSrcDevice);
+            audioTestSrc.setProperty('device', this.settings.pulseDevice || 'default');
 
             // Configure opus encoder
-            opusEnc.setProperty('bitrate', 64000);
-            opusEnc.setProperty('frame-size', 20);
-            opusEnc.setProperty('inband-fec', true);
-            opusEnc.setProperty('packet-loss-percentage', 4);
+            opusEnc.setProperty('bitrate', this.settings.opusBitrate || 64000);
+            opusEnc.setProperty('frame-size', this.settings.opusFrameSize || 20);
+            opusEnc.setProperty('inband-fec', this.settings.opusFec || false);
+            opusEnc.setProperty('packet-loss-percentage', this.settings.opusFecPacketLoss || 0);
 
             // Configure RTP payloader
             rtpOpusPay.setProperty('pt', 111);
@@ -236,13 +245,6 @@ class WHEPGStreamerServer {
             // Configure ULPFEC encoder
             rtpUlpFecEnc.setProperty('pt', 122);
             rtpUlpFecEnc.setProperty('percentage', 100);
-
-            // Configure RED encoder
-            // rtpRedEnc.setProperty('pt', 63);
-            // rtpRedEnc.setProperty('distance', 2);
-
-            // Configure identity element
-            // identifier.setProperty('drop-probability', 0.05);
 
             // Add elements to pipeline
             pipeline.add(audioTestSrc);
@@ -252,7 +254,6 @@ class WHEPGStreamerServer {
             pipeline.add(opusEnc);
             pipeline.add(rtpOpusPay);
             pipeline.add(rtpUlpFecEnc);
-            pipeline.add(rtpRedEnc);
             // pipeline.add(identifier);
             pipeline.add(queue2);
             pipeline.add(webrtc);
@@ -272,7 +273,6 @@ class WHEPGStreamerServer {
                 !opusEnc.link(rtpOpusPay) ||
                 !rtpOpusPay.link(rtpUlpFecEnc) ||
                 !rtpUlpFecEnc.link(queue2)
-                // !rtpRedEnc.link(queue2)
             ) {
                 console.error('❌ Failed to link pipeline elements');
                 return null;
@@ -493,8 +493,8 @@ class WHEPGStreamerServer {
 
                     let rtpredenc;
                     const _bin_webrtc = session.webrtc as Gst.Bin;
-                    const _bin_rtp = _bin_webrtc.getChildByName('bin0') as Gst.Bin;
-                    if (_bin_rtp) rtpredenc = _bin_rtp.getChildByName('rtpredenc0');
+                    const _bin_rtp = _bin_webrtc.getChildByIndex(0) as Gst.Bin;
+                    if (_bin_rtp) rtpredenc = _bin_rtp.getChildByIndex(0);
                     else console.log('❌ Unable to set RED distance due to rtpbin not found');
                     if (rtpredenc) rtpredenc.setProperty('distance', 2);
                     if (rtpredenc) rtpredenc.setProperty('allow-no-red-blocks', false);
